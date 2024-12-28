@@ -1,0 +1,160 @@
+<html>
+  <head>
+    <script src="https://aframe.io/releases/0.9.2/aframe.min.js"></script>
+  </head>
+  <body style="margin: 0; overflow: hidden;">
+    <a-scene embedded>
+      <!-- Create a video element to capture the real world -->
+      <a-assets>
+        <video id="background-video" autoplay loop crossorigin="anonymous"></video>
+      </a-assets>
+
+      <!-- Set the video as a skybox to display the real-world video -->
+      <a-sky src="#background-video"></a-sky>
+
+      <!-- Reticle (pointer) for interaction -->
+      <a-entity id="reticle" geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
+        material="color: white; shader: flat" position="0 0 -2" scale="0.1 0.1 0.1">
+      </a-entity>
+
+      <!-- Camera with look controls to allow movement in VR -->
+      <a-camera id="camera" look-controls>
+        <a-cursor fuse="true" timeout="1000" raycaster="objects: .clickable"></a-cursor>
+      </a-camera>
+    </a-scene>
+
+    <script>
+      // Initialize speech recognition and overlay setup
+      let recognition = null;
+      const cameraEl = document.getElementById('camera');
+      const sceneEl = document.querySelector('a-scene');
+
+      // Access the device camera with higher resolution settings
+      function startCamera() {
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
+        }).then(function(stream) {
+          const video = document.getElementById('background-video');
+          video.srcObject = stream; 
+          video.play();
+        }).catch(function(error) {
+          console.error('Error accessing camera:', error);
+        });
+      }
+
+      // Initialize Speech Recognition
+      function startSpeechRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          alert("Speech Recognition is not supported in this browser. Please use Chrome or Edge.");
+          return;
+        }
+
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onstart = function() {
+          console.log("Voice recognition started. Please speak...");
+        };
+
+        recognition.onresult = function(event) {
+          const command = event.results[0][0].transcript.toLowerCase();
+          console.log('Voice command received:', command);
+          handleVoiceCommand(command);
+          restartRecognition();
+        };
+
+        recognition.onerror = function(event) {
+          console.error('Speech recognition error:', event.error);
+        };
+
+        recognition.start();
+      }
+
+      // Handle voice commands for enabling and disabling vision modes
+      function handleVoiceCommand(command) {
+        if (command.includes('night vision')) {
+          enableNightVision();
+        } else if (command.includes('thermal vision')) {
+          enableThermalVision();
+        } else if (command.includes('turn off vision')) {
+          turnOffVision();
+        } else {
+          console.log('Command not recognized.');
+        }
+      }
+
+      // Restart speech recognition after processing
+      function restartRecognition() {
+        setTimeout(function() {
+          recognition.start();
+        }, 500);
+      }
+
+      // Function to create or update overlays (night/thermal vision)
+      function createOrUpdateOverlay(overlayId, color, opacity) {
+        let overlay = document.getElementById(overlayId);
+        if (!overlay) {
+          overlay = document.createElement('a-sphere');
+          overlay.setAttribute('id', overlayId);
+          overlay.setAttribute('radius', '50');
+          overlay.setAttribute('position', '0 0 0');
+          overlay.setAttribute('color', color);
+          overlay.setAttribute('opacity', opacity);
+          overlay.setAttribute('side', 'double');
+          sceneEl.appendChild(overlay);
+        } else {
+          overlay.setAttribute('color', color);
+          overlay.setAttribute('opacity', opacity);
+        }
+        overlay.setAttribute('position', '0 0 0');
+      }
+
+      // Apply Night Vision Effect
+      function enableNightVision() {
+        console.log('Night Vision Enabled');
+        removeOverlay('thermal-vision-overlay');
+        createOrUpdateOverlay('night-vision-overlay', '#001100', '0.7');
+      }
+
+      // Apply Thermal Vision Effect
+      function enableThermalVision() {
+        console.log('Thermal Vision Enabled');
+        removeOverlay('night-vision-overlay');
+        createOrUpdateOverlay('thermal-vision-overlay', '#ffcc00', '0.6');
+      }
+
+      // Remove overlays
+      function removeOverlay(overlayId) {
+        const overlay = document.getElementById(overlayId);
+        if (overlay) {
+          overlay.parentNode.removeChild(overlay);
+        }
+      }
+
+      // Turn off any vision effect
+      function turnOffVision() {
+        console.log('Turning off vision');
+        removeOverlay('night-vision-overlay');
+        removeOverlay('thermal-vision-overlay');
+      }
+
+      // Ensure overlays follow camera movement
+      function updateOverlayPosition() {
+        ['night-vision-overlay', 'thermal-vision-overlay'].forEach(overlayId => {
+          const overlay = document.getElementById(overlayId);
+          if (overlay) overlay.setAttribute('position', '0 0 0');
+        });
+      }
+
+      // Start camera and speech recognition when ready
+      startCamera();
+      startSpeechRecognition();
+
+      // Update overlay positions continuously
+      setInterval(updateOverlayPosition, 16); // ~60 FPS
+    </script>
+  </body>
+</html>
